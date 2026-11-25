@@ -202,6 +202,29 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,212,255,.18);ba
 .danger{background:#6b1e37}
 .small{font-size:12px;color:var(--muted)}
 
+/* ================= LOGS (glass terminal) ================= */
+.log-box{
+  height:460px;overflow:auto;padding:16px;border-radius:15px;
+  font-family:'Consolas','SFMono-Regular',ui-monospace,monospace;font-size:13px;line-height:1.7;
+  background:
+    radial-gradient(600px circle at 50% 0%,rgba(0,212,255,.06),transparent 55%),
+    rgba(7,4,13,.6);
+  border:1px solid var(--line);
+  backdrop-filter:blur(16px) saturate(150%);
+  -webkit-backdrop-filter:blur(16px) saturate(150%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 40px -20px rgba(0,212,255,.3);
+  position:relative;
+}
+.log-box::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 24px,rgba(255,255,255,.015) 25px);
+}
+.log-box .muted{font-family:'Rajdhani',sans-serif}
+.log-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;box-shadow:0 0 6px currentColor}
+.log-status{display:flex;align-items:center;gap:8px}
+.log-status .pulse{width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 10px var(--blue);animation:logPulse 1.6s ease-in-out infinite}
+@keyframes logPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
 @media(hover:none){
   .panel{transform:none!important}
   .panel:hover{transform:none}
@@ -249,6 +272,7 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,212,255,.18);ba
 <button data-tab="accounts">▣ Manage accounts</button>
 <button data-tab="telegram">＋ Add account</button>
 <button data-tab="chats">▤ Chat reader</button>
+<button data-tab="logs">▥ Logs</button>
 <button data-tab="security">◇ Security & devices</button>
 <button data-tab="backup">⇩ Export / backup</button>
 </aside>
@@ -273,6 +297,15 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,212,255,.18);ba
 <div class="chat-layout"><div class="panel chatlist" id="chatList">Unlock chat area to load chats.</div><div class="messages" id="messages"><div class="muted">Select a chat to view recent messages.</div></div></div>
 <p class="small">Read-only viewer. Archived chats are displayed as archived where Telegram provides that information. No messages are sent or deleted here.</p></div></section>
 
+<section id="logs" class="section"><div class="panel reveal">
+<div class="row" style="justify-content:space-between">
+  <div><h2 style="margin-bottom:2px">Live logs</h2><div class="log-status"><span class="pulse"></span><span class="muted">Auto-refreshing every 5s while this tab is open</span></div></div>
+  <button onclick="fetchLogs()">Refresh now</button>
+</div>
+<div id="logOutput" class="log-box"><div class="muted">No logs loaded yet.</div></div>
+<p class="small">Server-side activity log. Secrets, tokens, and message contents are never written to this log.</p>
+</div></section>
+
 <section id="security" class="section"><div class="panel reveal"><h2>Security & device sessions</h2><p>Website sign-in is remembered for up to 30 days on this browser/device using a secure, HTTP-only cookie.</p><p class="muted">For safety, every new browser/device must authenticate separately. A login on one device cannot securely make every unknown device logged in automatically.</p><p>Telegram login sessions are stored encrypted on the server. Use Telegram Settings → Devices to review or terminate Telegram sessions.</p><div class="notice">Never share your Telegram OTP, two-step password, API hash, or server encryption key.</div><button onclick="webLogout()">Log out this website device</button></div></section>
 
 <section id="backup" class="section"><div class="panel reveal"><h2>Export / backup</h2><p class="muted">Export account list metadata. Telegram session secrets are never included in the export.</p><button onclick="exportAccounts()">Download account metadata JSON</button><p class="small">Back up your Render persistent disk securely. Do not upload session backups to public storage.</p></div></section>
@@ -287,7 +320,7 @@ function msg(id,t){let e=document.getElementById(id);e.textContent=t;e.classList
 function showApp(){document.getElementById('loginPanel').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('logoutBtn').classList.remove('hidden');loadAccounts();initEffects()}
 async function webLogin(){try{await api('/api/web-login','POST',{password:document.getElementById('webPass').value});showApp()}catch(e){msg('loginMsg',e.message)}}
 async function webLogout(){try{await api('/api/web-logout','POST',{})}catch(e){}location.reload()}
-document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(b.dataset.tab).classList.add('active');refreshReveal()});
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(b.dataset.tab).classList.add('active');refreshReveal();if(b.dataset.tab==='logs')fetchLogs()});
 async function loadAccounts(){try{let d=await api('/api/accounts');document.getElementById('accountCount').textContent=d.accounts.length;let list=document.getElementById('accountList'),sel=document.getElementById('chatAccount');list.innerHTML='';let old=sel.value;sel.innerHTML='<option value="">Select account</option>';d.accounts.forEach(a=>{let el=document.createElement('div');el.className='item';let left=document.createElement('span');left.textContent=(a.label||'Telegram')+' · '+a.phone;let btn=document.createElement('button');btn.textContent='Remove';btn.onclick=()=>removeAccount(a.id);el.append(left,btn);list.append(el);let o=document.createElement('option');o.value=a.id;o.textContent=(a.label||'Telegram')+' · '+a.phone;sel.append(o)});if(old)sel.value=old}catch(e){}}
 async function removeAccount(id){if(!confirm('Remove this account session from this website?'))return;await api('/api/accounts/'+id+'/logout','POST',{});loadAccounts()}
 async function logoutAll(){if(!confirm('Remove ALL saved Telegram accounts from this website?'))return;await api('/api/accounts/logout-all','POST',{});loadAccounts();document.getElementById('chatList').textContent='No saved accounts.'}
@@ -298,6 +331,30 @@ async function lockChats(){await api('/api/chat-lock','POST',{});chatUnlocked=fa
 async function loadChats(){let id=document.getElementById('chatAccount').value;if(!id)return;try{let d=await api('/api/chats/'+id),list=document.getElementById('chatList');list.innerHTML='';d.chats.forEach(c=>{let el=document.createElement('div');el.className='chatitem';let title=document.createElement('b');title.textContent=c.title;let sub=document.createElement('div');sub.className='small';sub.textContent=c.type+' · unread '+c.unread+(c.archived?' · archived':'');el.append(title,sub);el.onclick=()=>loadMessages(id,c.id,c.title);list.append(el)});let s=await api('/api/stats/'+id);document.getElementById('chatCount').textContent=s.total_chats;document.getElementById('groupCount').textContent=s.groups;document.getElementById('channelCount').textContent=s.channels}catch(e){alert(e.message)}}
 async function loadMessages(a,p,title){try{let d=await api('/api/messages/'+a+'/'+p);let box=document.getElementById('messages');box.innerHTML='';let h=document.createElement('h3');h.textContent=title;box.append(h);d.messages.forEach(m=>{let el=document.createElement('div');el.className='msg'+(m.out?' out':'');el.textContent=(m.text|| (m.media?'[Media attachment]':'[Empty message]'))+'\\n'+(m.date||'');box.append(el)});box.scrollTop=box.scrollHeight}catch(e){alert(e.message)}}
 async function exportAccounts(){let d=await api('/api/accounts');let blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='xirus-account-metadata.json';a.click();URL.revokeObjectURL(a.href)}
+
+async function fetchLogs() {
+  try {
+    let d = await api('/api/logs');
+    let box = document.getElementById('logOutput');
+    box.innerHTML = '';
+    d.logs.forEach(l => {
+      let color = l.level === 'ERROR' ? '#ff4d4d' : (l.level === 'SUCCESS' ? '#4dff4d' : (l.level === 'WARN' ? '#ffb84d' : '#4dc3ff'));
+      let div = document.createElement('div');
+      div.style.marginBottom = '5px';
+      div.innerHTML = `<span style="color:#888">[${l.time}]</span> <span style="color:${color}; font-weight:bold">[${l.level}]</span> <span>${l.msg}</span>`;
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  } catch(e) { console.error(e); }
+}
+
+// Auto-refresh logs every 5 seconds if the logs tab is active
+setInterval(() => {
+  if(document.getElementById('logs').classList.contains('active')){
+    fetchLogs();
+  }
+}, 5000);
+
 (async()=>{try{let d=await api('/api/me');if(d.ok)showApp()}catch(e){}})();
 
 /* ======== visual-only effects: tilt, ripple, scroll reveal, bg parallax ======== */
