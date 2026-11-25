@@ -202,16 +202,26 @@ def telegram_verify():
     
     try:
         try:
-            loop.run_until_complete(item["client"].sign_in(phone=item["phone"], code=code, phone_code_hash=item["phone_code_hash"]))
+            # OTP से साइन इन करने की कोशिश
+            loop.run_until_complete(item["client"].sign_in(
+                phone=item["phone"], 
+                code=code, 
+                phone_code_hash=item["phone_code_hash"]
+            ))
         except Exception as exc:
-            if "password" in exc.__class__.__name__.lower() or "SessionPasswordNeeded" in str(type(exc)):
+            # अगर 2FA पासवर्ड की जरूरत हो
+            if "SessionPasswordNeeded" in str(type(exc)) or "CheckPasswordRequest" in str(type(exc)):
                 if not password:
-                    add_log("2FA required for this account", "WARN")
+                    add_log("2FA required: Password field is empty", "WARN")
                     return jsonify(needs_2fa=True, error="Telegram two-step password required"), 202
+                
+                add_log("Attempting 2FA password login...", "INFO")
+                # 2FA पासवर्ड के साथ साइन इन
                 loop.run_until_complete(item["client"].sign_in(password=password))
             else:
                 raise
                 
+        # चेक करें कि यूजर लॉगिन हो गया है या नहीं
         if not loop.run_until_complete(item["client"].is_user_authorized()):
             add_log("Verify failed: Authorization incomplete", "ERROR")
             return jsonify(error="Telegram authorization was not completed"), 400
