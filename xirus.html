@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XIRUS MODZ — Telegram Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#040108;
+  --red:#ff1b4c;
+  --red2:#ff6b8b;
+  --blue:#00d4ff;
+  --blue2:#3b6bff;
+  --glass:rgba(18,10,28,.42);
+  --glass2:rgba(10,6,18,.55);
+  --edge:rgba(255,255,255,.14);
+  --line:rgba(255,27,76,.4);
+  --line-b:rgba(0,212,255,.4);
+  --text:#f6f1ff;
+  --muted:#a89cc4;
+  --radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{height:100%}
+body{
+  margin:0;color:var(--text);
+  font:16px/1.45 'Rajdhani',system-ui,Arial;
+  background:var(--bg);
+  overflow-x:hidden;
+  position:relative;
+}
+
+/* ================= LIVE BACKGROUND ================= */
+.bg-field{position:fixed;inset:-10vh -10vw;z-index:-4;background:var(--bg);overflow:hidden;will-change:transform}
+.bg-field i{position:absolute;display:block;border-radius:50%;filter:blur(70px);mix-blend-mode:screen}
+.bg-field i:nth-child(1){width:95vmax;height:95vmax;top:-45vmax;left:-35vmax;background:radial-gradient(circle,var(--red) 0%,transparent 62%);opacity:.5;animation:driftA 28s ease-in-out infinite alternate}
+.bg-field i:nth-child(2){width:100vmax;height:100vmax;bottom:-50vmax;right:-40vmax;background:radial-gradient(circle,var(--blue) 0%,transparent 62%);opacity:.48;animation:driftB 32s ease-in-out infinite alternate}
+.bg-field i:nth-child(3){width:60vmax;height:60vmax;top:30%;left:35%;background:radial-gradient(circle,#8a2be2 0%,transparent 65%);opacity:.3;animation:driftC 22s ease-in-out infinite alternate}
+@keyframes driftA{0%{transform:translate(0,0) scale(1)}100%{transform:translate(14vw,9vh) scale(1.18)}}
+@keyframes driftB{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-12vw,-7vh) scale(1.22)}}
+@keyframes driftC{0%{transform:translate(-6vw,0) rotate(0deg)}100%{transform:translate(6vw,8vh) rotate(25deg)}}
+
+.bg-grid{
+  position:fixed;inset:0;z-index:-3;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,27,76,.09) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.09) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse 85% 65% at 50% 25%,#000 8%,transparent 78%);
+  animation:gridMove 20s linear infinite;
+}
+@keyframes gridMove{0%{background-position:0 0,0 0}100%{background-position:44px 88px,88px 44px}}
+
+.bg-scan{position:fixed;inset:0;z-index:-2;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(255,255,255,.012) 3px,transparent 4px);
+}
+
+.bg-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.05;mix-blend-mode:overlay}
+
+/* ================= TYPE / TEXT EFFECTS ================= */
+h1,h2,h3{font-family:'Orbitron',sans-serif;font-weight:800;margin:0 0 6px;letter-spacing:.4px}
+h2{font-size:19px}
+
+.shimmer{
+  background:linear-gradient(100deg,var(--red2) 0%,var(--blue) 35%,var(--red2) 70%,var(--blue) 100%);
+  background-size:260% auto;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:shimmer 7s linear infinite;
+}
+@keyframes shimmer{0%{background-position:0% 50%}100%{background-position:260% 50%}}
+
+.stats{
+  font-family:'Orbitron',sans-serif;font-size:30px;font-weight:900;margin-top:8px;
+}
+
+/* ================= BUTTONS / INPUTS ================= */
+button,input{font:inherit}
+button{
+  position:relative;overflow:hidden;
+  cursor:pointer;border:1px solid rgba(255,255,255,.1);border-radius:13px;
+  padding:12px 16px;color:#fff;font-weight:700;font-family:'Rajdhani',sans-serif;
+  background:linear-gradient(120deg,var(--red) 0%,var(--blue) 100%);
+  background-size:170% 170%;
+  box-shadow:0 8px 24px -8px rgba(255,27,76,.55),0 2px 0 rgba(255,255,255,.1) inset;
+  transition:transform .18s ease,box-shadow .18s ease,background-position .5s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+button:hover{transform:translateY(-2px);background-position:100% 0;box-shadow:0 14px 32px -8px rgba(0,212,255,.6)}
+button:active{transform:translateY(0) scale(.98)}
+button.danger{background:linear-gradient(120deg,#7a0e2a,#3a0a1f)}
+.ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.55);transform:scale(0);pointer-events:none;animation:rippleAnim .6s ease-out forwards}
+@keyframes rippleAnim{to{transform:scale(3.2);opacity:0}}
+
+input{
+  width:100%;padding:13px 14px;border-radius:12px;
+  border:1px solid rgba(255,255,255,.1);background:rgba(8,5,14,.65);color:#fff;outline:none;
+  transition:border-color .2s,box-shadow .2s,background .2s;
+  backdrop-filter:blur(6px);
+}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,212,255,.18);background:rgba(8,5,14,.85)}
+
+.wrap{max-width:1200px;margin:auto;padding:26px;position:relative;z-index:1}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:26px}
+.logo{font-size:23px;letter-spacing:1px;display:flex;align-items:center;gap:10px}
+.logo .mark{
+  width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--red),var(--blue));
+  box-shadow:0 0 20px rgba(255,27,76,.65),0 0 34px rgba(0,212,255,.4);
+  font-size:17px;animation:pulseMark 2.6s ease-in-out infinite;
+}
+@keyframes pulseMark{0%,100%{box-shadow:0 0 20px rgba(255,27,76,.65),0 0 34px rgba(0,212,255,.4)}50%{box-shadow:0 0 30px rgba(255,27,76,.9),0 0 46px rgba(0,212,255,.6)}}
+.muted{color:var(--muted);font-size:13px}
+
+/* ================= GLASS 3D PANELS ================= */
+.panel{
+  --mx:50%;--my:50%;
+  background:
+    radial-gradient(600px circle at var(--mx) var(--my),rgba(255,255,255,.06),transparent 45%),
+    linear-gradient(160deg,var(--glass),var(--glass2));
+  border:1px solid var(--edge);
+  border-radius:var(--radius);
+  padding:20px;
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  box-shadow:
+    0 24px 60px -24px #000c,
+    inset 0 1px 0 rgba(255,255,255,.08),
+    inset 0 0 0 1px rgba(255,255,255,.02);
+  position:relative;
+  transform-style:preserve-3d;
+  transform:perspective(1000px) rotateX(0deg) rotateY(0deg);
+  transition:transform .12s ease-out,box-shadow .3s ease,border-color .3s ease,opacity .5s ease;
+  will-change:transform;
+}
+.panel::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background:linear-gradient(135deg,var(--red),transparent 40%,var(--blue));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:.45;pointer-events:none;transition:opacity .3s ease;
+}
+.panel::after{
+  content:"";position:absolute;top:0;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);
+  opacity:.5;pointer-events:none;
+}
+.panel:hover{border-color:var(--line-b)}
+.panel:hover::before{opacity:.8}
+
+/* scroll reveal */
+.panel.reveal{opacity:0;transform:perspective(1000px) translateY(26px) rotateX(4deg);}
+.panel.reveal.in-view{opacity:1;transform:perspective(1000px) translateY(0) rotateX(0deg);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.layout{display:grid;grid-template-columns:230px 1fr;gap:16px}
+.nav{display:flex;flex-direction:column;gap:9px}
+.nav button{
+  background:rgba(20,13,30,.55);text-align:left;color:var(--muted);
+  box-shadow:none;border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);
+}
+.nav button.active{
+  background:linear-gradient(110deg,var(--red),var(--blue));color:#fff;
+  box-shadow:0 8px 22px -8px rgba(255,27,76,.5);
+}
+.section{display:none}
+.section.active{display:block;animation:rise .4s cubic-bezier(.2,.7,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.field{margin:14px 0}
+.field label{display:block;margin-bottom:7px;color:var(--muted);font-size:13px;font-weight:600}
+
+.list{display:grid;gap:9px;margin-top:14px}
+.item{
+  padding:13px 14px;border:1px solid rgba(255,255,255,.08);border-radius:13px;
+  background:rgba(13,9,20,.55);backdrop-filter:blur(8px);
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  transition:border-color .2s,transform .2s,background .2s;
+}
+.item:hover{border-color:var(--line-b);transform:translateX(3px);background:rgba(13,9,20,.8)}
+
+.chat-layout{display:grid;grid-template-columns:minmax(180px,280px) 1fr;gap:12px;min-height:400px}
+.chatlist{max-height:520px;overflow:auto}
+.chatitem{padding:12px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer;border-radius:9px;transition:background .15s,transform .15s}
+.chatitem:hover{background:rgba(255,27,76,.1);transform:translateX(2px)}
+.messages{
+  height:520px;overflow:auto;background:rgba(9,6,16,.6);border:1px solid var(--line);
+  border-radius:15px;padding:14px;backdrop-filter:blur(10px);
+}
+.msg{
+  padding:10px 13px;margin:8px 0;max-width:85%;border-radius:13px;
+  background:rgba(26,19,40,.8);white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid rgba(255,255,255,.06);
+  animation:msgIn .35s ease;
+}
+@keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg.out{margin-left:auto;background:linear-gradient(120deg,rgba(90,16,48,.85),rgba(27,47,107,.85))}
+.hidden{display:none!important}
+.notice{padding:11px 13px;border-radius:11px;background:rgba(255,27,76,.14);border:1px solid var(--line);color:#fff;margin:11px 0}
+.danger{background:#6b1e37}
+.small{font-size:12px;color:var(--muted)}
+
+@media(hover:none){
+  .panel{transform:none!important}
+  .panel:hover{transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .bg-field i,.bg-grid,.logo .mark,.shimmer{animation:none}
+  .panel{transition:none}
+  .panel.reveal{opacity:1;transform:none}
+}
+@media(max-width:760px){
+  .layout{grid-template-columns:1fr}
+  .nav{display:grid;grid-template-columns:repeat(2,1fr)}
+  .chat-layout{grid-template-columns:1fr}
+  .chatlist{max-height:220px}
+  .messages{height:430px}
+  .wrap{padding:14px}
+}
+</style></head>
+<body>
+<div class="bg-field"><i></i><i></i><i></i></div>
+<div class="bg-grid"></div>
+<div class="bg-scan"></div>
+<svg class="bg-grain" width="0" height="0">
+  <filter id="grainFilter"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/></filter>
+</svg>
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="logo"><span class="mark">⚡</span>XIRUS <span class="shimmer">MODZ</span></div>
+    <div class="muted">TELEGRAM MANAGER · PERSONAL ACCOUNT CONTROL CENTER</div>
+  </div>
+  <button id="logoutBtn" class="hidden" onclick="webLogout()">Log out</button>
+</header>
+
+<section id="loginPanel" class="panel" style="max-width:440px;margin:8vh auto">
+<h2>Website Login</h2><p class="muted">Sign in to your private dashboard.</p>
+<div class="field"><label>Website password</label><input id="webPass" type="password" autocomplete="current-password"></div>
+<button onclick="webLogin()">Unlock dashboard</button><div id="loginMsg" class="notice hidden"></div>
+</section>
+
+<main id="app" class="hidden">
+<div class="layout">
+<aside class="panel nav">
+<button class="active" data-tab="overview">⌂ Overview</button>
+<button data-tab="accounts">▣ Manage accounts</button>
+<button data-tab="telegram">＋ Add account</button>
+<button data-tab="chats">▤ Chat reader</button>
+<button data-tab="security">◇ Security & devices</button>
+<button data-tab="backup">⇩ Export / backup</button>
+</aside>
+<div>
+<section id="overview" class="section active">
+<div class="panel reveal"><h2>Dashboard</h2><p class="muted">Your Telegram accounts at a glance.</p><div class="grid">
+<div class="panel reveal"><div class="muted">Saved accounts</div><div class="stats shimmer" id="accountCount">0</div></div>
+<div class="panel reveal"><div class="muted">Selected account chats</div><div class="stats shimmer" id="chatCount">—</div></div>
+<div class="panel reveal"><div class="muted">Groups</div><div class="stats shimmer" id="groupCount">—</div></div>
+<div class="panel reveal"><div class="muted">Channels</div><div class="stats shimmer" id="channelCount">—</div></div>
+</div></div></section>
+
+<section id="accounts" class="section"><div class="panel reveal"><div class="row"><h2 style="flex:1">Manage accounts</h2><button onclick="loadAccounts()">Refresh</button></div><div id="accountList" class="list"></div><button class="danger" style="margin-top:14px" onclick="logoutAll()">Log off all saved accounts</button><p class="small">This removes saved sessions from this website. It does not terminate Telegram sessions in Telegram's official device settings.</p></div></section>
+
+<section id="telegram" class="section"><div class="panel reveal"><h2>Add Telegram account</h2><p class="muted">Use your own account. Telegram will send its login code in the official Telegram app or by SMS.</p>
+<div class="field"><label>Phone number with country code</label><input id="phone" placeholder="+91XXXXXXXXXX"></div><button onclick="startLogin()">Send Telegram code</button>
+<div id="verifyBox" class="hidden"><div class="field"><label>Telegram login code</label><input id="code" inputmode="numeric" autocomplete="one-time-code"></div><div class="field"><label>Two-step verification password (if enabled)</label><input id="twofa" type="password"></div><button onclick="verifyLogin()">Verify & save account</button></div><div id="tgMsg" class="notice hidden"></div></div></section>
+
+<section id="chats" class="section"><div class="panel reveal"><div class="row"><h2 style="flex:1">Chat reader</h2><button onclick="unlockChats()">Unlock chat area</button><button class="danger" onclick="lockChats()">Lock</button></div>
+<div id="chatLock" class="field"><label>Private chat password</label><input id="chatPass" type="password" placeholder="Enter chat password"></div>
+<div class="field"><label>Telegram account</label><select id="chatAccount" style="width:100%;padding:12px;background:rgba(8,5,14,.65);color:white;border:1px solid rgba(255,255,255,.1);border-radius:12px" onchange="loadChats()"><option value="">Select account</option></select></div>
+<div class="chat-layout"><div class="panel chatlist" id="chatList">Unlock chat area to load chats.</div><div class="messages" id="messages"><div class="muted">Select a chat to view recent messages.</div></div></div>
+<p class="small">Read-only viewer. Archived chats are displayed as archived where Telegram provides that information. No messages are sent or deleted here.</p></div></section>
+
+<section id="security" class="section"><div class="panel reveal"><h2>Security & device sessions</h2><p>Website sign-in is remembered for up to 30 days on this browser/device using a secure, HTTP-only cookie.</p><p class="muted">For safety, every new browser/device must authenticate separately. A login on one device cannot securely make every unknown device logged in automatically.</p><p>Telegram login sessions are stored encrypted on the server. Use Telegram Settings → Devices to review or terminate Telegram sessions.</p><div class="notice">Never share your Telegram OTP, two-step password, API hash, or server encryption key.</div><button onclick="webLogout()">Log out this website device</button></div></section>
+
+<section id="backup" class="section"><div class="panel reveal"><h2>Export / backup</h2><p class="muted">Export account list metadata. Telegram session secrets are never included in the export.</p><button onclick="exportAccounts()">Download account metadata JSON</button><p class="small">Back up your Render persistent disk securely. Do not upload session backups to public storage.</p></div></section>
+</div></div></main>
+</div>
+
+<script>
+/* ======== original app logic — unchanged ======== */
+let loginId=null, chatUnlocked=false, selectedAccount=null;
+async function api(url,method='GET',body=null){let r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):null});let d=await r.json().catch(()=>({error:'Unexpected server response'}));if(!r.ok)throw Error(d.error||'Request failed');return d}
+function msg(id,t){let e=document.getElementById(id);e.textContent=t;e.classList.remove('hidden')}
+function showApp(){document.getElementById('loginPanel').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('logoutBtn').classList.remove('hidden');loadAccounts();initEffects()}
+async function webLogin(){try{await api('/api/web-login','POST',{password:document.getElementById('webPass').value});showApp()}catch(e){msg('loginMsg',e.message)}}
+async function webLogout(){try{await api('/api/web-logout','POST',{})}catch(e){}location.reload()}
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(b.dataset.tab).classList.add('active');refreshReveal()});
+async function loadAccounts(){try{let d=await api('/api/accounts');document.getElementById('accountCount').textContent=d.accounts.length;let list=document.getElementById('accountList'),sel=document.getElementById('chatAccount');list.innerHTML='';let old=sel.value;sel.innerHTML='<option value="">Select account</option>';d.accounts.forEach(a=>{let el=document.createElement('div');el.className='item';let left=document.createElement('span');left.textContent=(a.label||'Telegram')+' · '+a.phone;let btn=document.createElement('button');btn.textContent='Remove';btn.onclick=()=>removeAccount(a.id);el.append(left,btn);list.append(el);let o=document.createElement('option');o.value=a.id;o.textContent=(a.label||'Telegram')+' · '+a.phone;sel.append(o)});if(old)sel.value=old}catch(e){}}
+async function removeAccount(id){if(!confirm('Remove this account session from this website?'))return;await api('/api/accounts/'+id+'/logout','POST',{});loadAccounts()}
+async function logoutAll(){if(!confirm('Remove ALL saved Telegram accounts from this website?'))return;await api('/api/accounts/logout-all','POST',{});loadAccounts();document.getElementById('chatList').textContent='No saved accounts.'}
+async function startLogin(){try{let d=await api('/api/telegram/start','POST',{phone:document.getElementById('phone').value});loginId=d.login_id;document.getElementById('verifyBox').classList.remove('hidden');msg('tgMsg',d.message)}catch(e){msg('tgMsg',e.message)}}
+async function verifyLogin(){try{let d=await api('/api/telegram/verify','POST',{login_id:loginId,code:document.getElementById('code').value,twofa:document.getElementById('twofa').value});if(d.needs_2fa){msg('tgMsg','Enter your Telegram two-step verification password and verify again.');return}msg('tgMsg','Account saved: '+d.label+' '+d.phone);document.getElementById('verifyBox').classList.add('hidden');loginId=null;loadAccounts()}catch(e){msg('tgMsg',e.message)}}
+async function unlockChats(){try{await api('/api/chat-unlock','POST',{password:document.getElementById('chatPass').value});chatUnlocked=true;document.getElementById('chatLock').classList.add('hidden');loadChats()}catch(e){alert(e.message)}}
+async function lockChats(){await api('/api/chat-lock','POST',{});chatUnlocked=false;document.getElementById('chatLock').classList.remove('hidden');document.getElementById('chatList').textContent='Chat area locked';document.getElementById('messages').textContent='Locked'}
+async function loadChats(){let id=document.getElementById('chatAccount').value;if(!id)return;try{let d=await api('/api/chats/'+id),list=document.getElementById('chatList');list.innerHTML='';d.chats.forEach(c=>{let el=document.createElement('div');el.className='chatitem';let title=document.createElement('b');title.textContent=c.title;let sub=document.createElement('div');sub.className='small';sub.textContent=c.type+' · unread '+c.unread+(c.archived?' · archived':'');el.append(title,sub);el.onclick=()=>loadMessages(id,c.id,c.title);list.append(el)});let s=await api('/api/stats/'+id);document.getElementById('chatCount').textContent=s.total_chats;document.getElementById('groupCount').textContent=s.groups;document.getElementById('channelCount').textContent=s.channels}catch(e){alert(e.message)}}
+async function loadMessages(a,p,title){try{let d=await api('/api/messages/'+a+'/'+p);let box=document.getElementById('messages');box.innerHTML='';let h=document.createElement('h3');h.textContent=title;box.append(h);d.messages.forEach(m=>{let el=document.createElement('div');el.className='msg'+(m.out?' out':'');el.textContent=(m.text|| (m.media?'[Media attachment]':'[Empty message]'))+'\\n'+(m.date||'');box.append(el)});box.scrollTop=box.scrollHeight}catch(e){alert(e.message)}}
+async function exportAccounts(){let d=await api('/api/accounts');let blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='xirus-account-metadata.json';a.click();URL.revokeObjectURL(a.href)}
+(async()=>{try{let d=await api('/api/me');if(d.ok)showApp()}catch(e){}})();
+
+/* ======== visual-only effects: tilt, ripple, scroll reveal, bg parallax ======== */
+let revealObserver;
+function initEffects(){
+  // pointer/touch 3D tilt on panels
+  const MAXTILT=7;
+  document.querySelectorAll('.panel').forEach(panel=>{
+    if(panel.dataset.tiltBound)return; panel.dataset.tiltBound='1';
+    const setFromPoint=(clientX,clientY)=>{
+      const r=panel.getBoundingClientRect();
+      const px=(clientX-r.left)/r.width, py=(clientY-r.top)/r.height;
+      const rx=(0.5-py)*MAXTILT*2, ry=(px-0.5)*MAXTILT*2;
+      panel.style.transform=`perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateY(-2px)`;
+      panel.style.setProperty('--mx',(px*100).toFixed(1)+'%');
+      panel.style.setProperty('--my',(py*100).toFixed(1)+'%');
+    };
+    panel.addEventListener('mousemove',e=>setFromPoint(e.clientX,e.clientY));
+    panel.addEventListener('mouseleave',()=>{panel.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg)'});
+    panel.addEventListener('touchstart',e=>{if(e.touches[0])setFromPoint(e.touches[0].clientX,e.touches[0].clientY)},{passive:true});
+    panel.addEventListener('touchmove',e=>{if(e.touches[0])setFromPoint(e.touches[0].clientX,e.touches[0].clientY)},{passive:true});
+    panel.addEventListener('touchend',()=>{panel.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg)'});
+  });
+
+  // ripple on buttons (mouse + touch)
+  document.addEventListener('click',e=>{
+    const btn=e.target.closest('button'); if(!btn)return;
+    const r=btn.getBoundingClientRect();
+    const x=(e.clientX||r.left+r.width/2)-r.left, y=(e.clientY||r.top+r.height/2)-r.top;
+    const span=document.createElement('span');
+    const size=Math.max(r.width,r.height);
+    span.className='ripple';
+    span.style.width=span.style.height=size+'px';
+    span.style.left=(x-size/2)+'px';
+    span.style.top=(y-size/2)+'px';
+    btn.appendChild(span);
+    setTimeout(()=>span.remove(),650);
+  });
+
+  // scroll reveal for panels
+  if('IntersectionObserver' in window){
+    revealObserver=new IntersectionObserver(entries=>{
+      entries.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in-view'); } });
+    },{threshold:0.12});
+    refreshReveal();
+  } else {
+    document.querySelectorAll('.reveal').forEach(p=>p.classList.add('in-view'));
+  }
+
+  // subtle parallax on live bg while scrolling
+  let ticking=false;
+  window.addEventListener('scroll',()=>{
+    if(ticking)return; ticking=true;
+    requestAnimationFrame(()=>{
+      const y=window.scrollY||0;
+      document.querySelector('.bg-field').style.transform=`translateY(${y*0.08}px)`;
+      document.querySelector('.bg-grid').style.transform=`translateY(${y*0.04}px)`;
+      ticking=false;
+    });
+  },{passive:true});
+}
+function refreshReveal(){
+  if(!revealObserver)return;
+  document.querySelectorAll('.section.active .reveal').forEach(p=>{
+    revealObserver.observe(p);
+  });
+}
+</script>
+</body></html>
