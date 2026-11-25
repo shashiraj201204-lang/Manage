@@ -1,4 +1,4 @@
-import os, json, time, uuid, sqlite3, secrets, asyncio, traceback, logging
+import os, json, time, uuid, sqlite3, secrets, asyncio, traceback
 from functools import wraps
 from flask import Flask, request, jsonify, session, send_file
 from cryptography.fernet import Fernet, InvalidToken
@@ -72,15 +72,6 @@ def chat_auth(fn):
         return fn(*a, **kw)
     return wrapped
 
-def run_async(coro):
-    """Safely run async telethon methods in a new event loop."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
 def get_client(account_id):
     with db() as con:
         row = con.execute("SELECT session_enc FROM accounts WHERE id=?", (account_id,)).fetchone()
@@ -91,10 +82,15 @@ def get_client(account_id):
     except Exception as e:
         add_log(f"Decryption failed for account {account_id}: {e}", "ERROR")
         return None
-    client = TelegramClient(StringSession(string_session), int(API_ID), API_HASH)
-    run_async(client.connect())
-    if not run_async(client.is_user_authorized()):
-        run_async(client.disconnect())
+    
+    # Telethon needs an event loop attached to the client
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    client = TelegramClient(StringSession(string_session), int(API_ID), API_HASH, loop=loop)
+    
+    loop.run_until_complete(client.connect())
+    if not loop.run_until_complete(client.is_user_authorized()):
+        loop.run_until_complete(client.disconnect())
         return None
     return client
 
@@ -160,23 +156,24 @@ def telegram_start():
     add_log(f"Initiating Telegram login for {phone}...", "INFO")
     
     try:
-        client = TelegramClient(StringSession(), int(API_ID), API_HASH)
-        run_async(client.connect())
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        # Send code request
-        sent = run_async(client.send_code_request(phone))
+        client = TelegramClient(StringSession(), int(API_ID), API_HASH, loop=loop)
+        loop.run_until_complete(client.connect())
+        
+        sent = loop.run_until_complete(client.send_code_request(phone))
         
         login_id = secrets.token_urlsafe(24)
         pending[login_id] = {
             "client": client, "phone": phone, "phone_code_hash": sent.phone_code_hash,
-            "owner": session.get("device_id"), "created": time.time()
+            "owner": session.get("device_id"), "created": time.time(), "loop": loop
         }
         add_log(f"OTP sent successfully to {phone}", "SUCCESS")
         return jsonify(ok=True, login_id=login_id, message="Telegram login code sent")
     except Exception as e:
         error_msg = str(e)
         add_log(f"Telegram Send Code Error: {error_msg}", "ERROR")
-        # Log the traceback for deep debugging
         add_log(traceback.format_exc(), "DEBUG")
         return jsonify(error=error_msg), 400
 
@@ -192,32 +189,34 @@ def telegram_verify():
         return jsonify(error="Login request expired. Start again."), 400
         
     if time.time() - item["created"] > 600:
-        run_async(item["client"].disconnect())
+        item["loop"].run_until_complete(item["client"].disconnect())
         pending.pop(login_id, None)
         add_log("Verify failed: OTP Timeout", "WARN")
         return jsonify(error="Code expired. Start again."), 400
         
     code = str(data.get("code", "")).strip()
     password = str(data.get("twofa", ""))
+    loop = item["loop"]
+    
     add_log(f"Verifying code for {item['phone']}...", "INFO")
     
     try:
         try:
-            run_async(item["client"].sign_in(phone=item["phone"], code=code, phone_code_hash=item["phone_code_hash"]))
+            loop.run_until_complete(item["client"].sign_in(phone=item["phone"], code=code, phone_code_hash=item["phone_code_hash"]))
         except Exception as exc:
             if "password" in exc.__class__.__name__.lower() or "SessionPasswordNeeded" in str(type(exc)):
                 if not password:
                     add_log("2FA required for this account", "WARN")
                     return jsonify(needs_2fa=True, error="Telegram two-step password required"), 202
-                run_async(item["client"].sign_in(password=password))
+                loop.run_until_complete(item["client"].sign_in(password=password))
             else:
                 raise
                 
-        if not run_async(item["client"].is_user_authorized()):
+        if not loop.run_until_complete(item["client"].is_user_authorized()):
             add_log("Verify failed: Authorization incomplete", "ERROR")
             return jsonify(error="Telegram authorization was not completed"), 400
             
-        me_obj = run_async(item["client"].get_me())
+        me_obj = loop.run_until_complete(item["client"].get_me())
         account_id = str(uuid.uuid4())
         raw = item["client"].session.save()
         encrypted = cipher.encrypt(raw.encode())
@@ -227,7 +226,7 @@ def telegram_verify():
             con.execute("INSERT INTO accounts(id,phone,label,session_enc,created_at) VALUES(?,?,?,?,?)",
                         (account_id, item["phone"], label, encrypted, int(time.time())))
         
-        run_async(item["client"].disconnect())
+        loop.run_until_complete(item["client"].disconnect())
         pending.pop(login_id, None)
         add_log(f"Account {label} ({item['phone']}) successfully saved", "SUCCESS")
         return jsonify(ok=True, account_id=account_id, label=label, phone=item["phone"], message="Account securely saved")
@@ -268,8 +267,10 @@ def chats(account_id):
     client = get_client(account_id)
     if not client:
         return jsonify(error="Account session unavailable; add the account again"), 404
+    
+    loop = asyncio.get_event_loop()
     try:
-        dialogs = run_async(client.get_dialogs(limit=250))
+        dialogs = loop.run_until_complete(client.get_dialogs(limit=250))
         out = []
         for d in dialogs:
             ent = d.entity
@@ -287,7 +288,7 @@ def chats(account_id):
         add_log(f"Error loading chats: {e}", "ERROR")
         return jsonify(error=str(e)), 400
     finally:
-        run_async(client.disconnect())
+        loop.run_until_complete(client.disconnect())
 
 @app.get("/api/messages/<account_id>/<peer_id>")
 @web_auth
@@ -296,9 +297,11 @@ def messages(account_id, peer_id):
     client = get_client(account_id)
     if not client:
         return jsonify(error="Account session unavailable"), 404
+        
+    loop = asyncio.get_event_loop()
     try:
-        entity = run_async(client.get_entity(int(peer_id)))
-        msgs = run_async(client.get_messages(entity, limit=min(int(request.args.get("limit", 50)), 100)))
+        entity = loop.run_until_complete(client.get_entity(int(peer_id)))
+        msgs = loop.run_until_complete(client.get_messages(entity, limit=min(int(request.args.get("limit", 50)), 100)))
         out = []
         for m in reversed(msgs):
             if not m: continue
@@ -312,7 +315,27 @@ def messages(account_id, peer_id):
         add_log(f"Error loading messages: {e}", "ERROR")
         return jsonify(error=str(e)), 400
     finally:
-        run_async(client.disconnect())
+        loop.run_until_complete(client.disconnect())
+
+@app.get("/api/stats/<account_id>")
+@web_auth
+def stats(account_id):
+    client = get_client(account_id)
+    if not client:
+        return jsonify(error="Account session unavailable"), 404
+        
+    loop = asyncio.get_event_loop()
+    try:
+        dialogs = loop.run_until_complete(client.get_dialogs(limit=500))
+        return jsonify(total_chats=len(dialogs),
+            groups=sum(1 for d in dialogs if getattr(d.entity, "megagroup", False)),
+            channels=sum(1 for d in dialogs if getattr(d.entity, "broadcast", False)),
+            unread=sum(int(d.unread_count or 0) for d in dialogs))
+    except Exception as e:
+        add_log(f"Error loading stats: {e}", "ERROR")
+        return jsonify(error=str(e)), 400
+    finally:
+        loop.run_until_complete(client.disconnect())
 
 @app.get("/api/logs")
 @web_auth
