@@ -1,6 +1,6 @@
-import os, json, time, uuid, sqlite3, secrets
+import os, json, time, uuid, sqlite3, secrets, asyncio
 from functools import wraps
-from flask import Flask, request, jsonify, session, send_file, make_response
+from flask import Flask, request, jsonify, session, send_file
 from cryptography.fernet import Fernet, InvalidToken
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -10,6 +10,7 @@ DATA_DIR = os.environ.get("DATA_DIR", os.path.join(APP_DIR, "data"))
 SESSION_DIR = os.path.join(DATA_DIR, "sessions")
 DB_PATH = os.path.join(DATA_DIR, "xirus.db")
 os.makedirs(SESSION_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "")
@@ -25,7 +26,7 @@ API_ID = os.environ.get("TG_API_ID", "32185221")
 API_HASH = os.environ.get("TG_API_HASH", "da15b7e593c026a62ef52746e24fa76f")
 WEB_PASSWORD = os.environ.get("WEB_PASSWORD", "shashi123")
 CHAT_PASSWORD = os.environ.get("CHAT_PASSWORD", "shashi121")
-FERNET_KEY = os.environ.get("FERNET_KEY", "CK1BL7aOzJQyLwjek3UR9yMnzVpkvDP_G2nSBisAROs")
+FERNET_KEY = os.environ.get("FERNET_KEY", "")
 
 if not app.secret_key:
     raise RuntimeError("Set FLASK_SECRET_KEY in Render environment variables.")
@@ -33,10 +34,10 @@ if not WEB_PASSWORD or not CHAT_PASSWORD:
     raise RuntimeError("Set WEB_PASSWORD and CHAT_PASSWORD in Render environment variables.")
 if not FERNET_KEY:
     raise RuntimeError("Set FERNET_KEY in Render environment variables.")
+
 cipher = Fernet(FERNET_KEY.encode())
 
-# Pending OTP clients live only in memory. If the Render instance restarts during
-# login, start the Telegram login again. Authenticated sessions are encrypted in SQLite.
+# Pending OTP clients live only in memory.
 pending = {}
 
 def db():
@@ -78,9 +79,10 @@ def get_client(account_id):
     except (InvalidToken, Exception):
         return None
     client = TelegramClient(StringSession(string_session), int(API_ID), API_HASH)
-    client.connect()
-    if not client.is_user_authorized():
-        client.disconnect()
+    # Telethon ke client ko connect karna asynchronous hota hai, use sync karna hoga
+    asyncio.get_event_loop().run_until_complete(client.connect())
+    if not asyncio.get_event_loop().run_until_complete(client.is_user_authorized()):
+        asyncio.get_event_loop().run_until_complete(client.disconnect())
         return None
     return client
 
@@ -140,8 +142,13 @@ def telegram_start():
         return jsonify(error="Phone number with country code is required"), 400
     try:
         client = TelegramClient(StringSession(), int(API_ID), API_HASH)
-        client.connect()
-        sent = client.send_code_request(phone)
+        
+        # Async calls ko properly handle karein
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(client.connect())
+        sent = loop.run_until_complete(client.send_code_request(phone))
+        
         login_id = secrets.token_urlsafe(24)
         pending[login_id] = {
             "client": client, "phone": phone, "phone_code_hash": sent.phone_code_hash,
@@ -160,25 +167,31 @@ def telegram_verify():
     if not item or item["owner"] != session.get("device_id"):
         return jsonify(error="Login request expired. Start again."), 400
     if time.time() - item["created"] > 600:
-        item["client"].disconnect()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(item["client"].disconnect())
         pending.pop(login_id, None)
         return jsonify(error="Code expired. Start again."), 400
     code = str(data.get("code", "")).strip()
     password = str(data.get("twofa", ""))
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
         try:
-            item["client"].sign_in(phone=item["phone"], code=code,
-                                   phone_code_hash=item["phone_code_hash"])
+            loop.run_until_complete(item["client"].sign_in(phone=item["phone"], code=code,
+                                   phone_code_hash=item["phone_code_hash"]))
         except Exception as exc:
             if "password" in exc.__class__.__name__.lower() or "SessionPasswordNeeded" in str(type(exc)):
                 if not password:
                     return jsonify(needs_2fa=True, error="Telegram two-step password required"), 202
-                item["client"].sign_in(password=password)
+                loop.run_until_complete(item["client"].sign_in(password=password))
             else:
                 raise
-        if not item["client"].is_user_authorized():
+        if not loop.run_until_complete(item["client"].is_user_authorized()):
             return jsonify(error="Telegram authorization was not completed"), 400
-        me_obj = item["client"].get_me()
+            
+        me_obj = loop.run_until_complete(item["client"].get_me())
         account_id = str(uuid.uuid4())
         raw = item["client"].session.save()
         encrypted = cipher.encrypt(raw.encode())
@@ -186,7 +199,8 @@ def telegram_verify():
         with db() as con:
             con.execute("INSERT INTO accounts(id,phone,label,session_enc,created_at) VALUES(?,?,?,?,?)",
                         (account_id, item["phone"], label, encrypted, int(time.time())))
-        item["client"].disconnect()
+        
+        loop.run_until_complete(item["client"].disconnect())
         pending.pop(login_id, None)
         return jsonify(ok=True, account_id=account_id, label=label,
                        phone=item["phone"], message="Account securely saved")
@@ -223,7 +237,9 @@ def chats(account_id):
     if not client:
         return jsonify(error="Account session unavailable; add the account again"), 404
     try:
-        dialogs = client.get_dialogs(limit=250)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        dialogs = loop.run_until_complete(client.get_dialogs(limit=250))
         out = []
         for d in dialogs:
             ent = d.entity
@@ -240,7 +256,7 @@ def chats(account_id):
     except Exception as e:
         return jsonify(error=str(e)), 400
     finally:
-        client.disconnect()
+        loop.run_until_complete(client.disconnect())
 
 @app.get("/api/messages/<account_id>/<peer_id>")
 @web_auth
@@ -250,8 +266,10 @@ def messages(account_id, peer_id):
     if not client:
         return jsonify(error="Account session unavailable"), 404
     try:
-        entity = client.get_entity(int(peer_id))
-        msgs = client.get_messages(entity, limit=min(int(request.args.get("limit", 50)), 100))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        entity = loop.run_until_complete(client.get_entity(int(peer_id)))
+        msgs = loop.run_until_complete(client.get_messages(entity, limit=min(int(request.args.get("limit", 50)), 100)))
         out = []
         for m in reversed(msgs):
             if not m:
@@ -265,7 +283,7 @@ def messages(account_id, peer_id):
     except Exception as e:
         return jsonify(error=str(e)), 400
     finally:
-        client.disconnect()
+        loop.run_until_complete(client.disconnect())
 
 @app.get("/api/stats/<account_id>")
 @web_auth
@@ -274,7 +292,9 @@ def stats(account_id):
     if not client:
         return jsonify(error="Account session unavailable"), 404
     try:
-        dialogs = client.get_dialogs(limit=500)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        dialogs = loop.run_until_complete(client.get_dialogs(limit=500))
         return jsonify(total_chats=len(dialogs),
             groups=sum(1 for d in dialogs if getattr(d.entity, "megagroup", False)),
             channels=sum(1 for d in dialogs if getattr(d.entity, "broadcast", False)),
@@ -282,7 +302,7 @@ def stats(account_id):
     except Exception as e:
         return jsonify(error=str(e)), 400
     finally:
-        client.disconnect()
+        loop.run_until_complete(client.disconnect())
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
